@@ -1,29 +1,40 @@
 import torch
 from torch import nn
-from torchvision import datasets, transforms
+from torchvision import datasets
 from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-num_of_epochs = 20
+num_of_epochs = 2
 learning_rate = 1e-2
-batch_size = 64
+batch_size = 16
 shuffle_datasets=False
 
+labels = torch.as_tensor(nn.functional.one_hot(torch.arange(0, 10), 10), dtype=torch.float32)
 
 # https://pytorch.org/vision/stable/generated/torchvision.transforms.ToTensor.html
-train_data = datasets.MNIST(root="data", download=True, transform=ToTensor())
-test_data = datasets.MNIST(root="data", train=False, download=True, transform=ToTensor())
+train_data = datasets.MNIST(
+  root="data", 
+  download=True,
+  transform=ToTensor(),
+)
+test_data = datasets.MNIST(
+  root="data", 
+  train=False, 
+  download=True, 
+  transform=ToTensor(), 
+)
 
 train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=shuffle_datasets)
 test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=shuffle_datasets)
 
-train_features, train_labels = next(iter(train_dataloader))
-print(train_features.shape)
-print(train_labels.shape)
-print(train_features.reshape(64, 28*28))
+# train_features, train_labels = next(iter(train_dataloader))
+
+# print(train_features.shape)
+# print(train_labels.shape)
+# print(train_features.reshape(64, 28*28))
 # train_features is pixels, train_labels is a single number 0-9, that is the same as the image
 # print(nn.functional.one_hot(train_labels))
 
@@ -52,12 +63,18 @@ m = nn.Softmax(dim=1)
 def train_loop(dataloader, model, loss_fn, optimizer):
   size = len(dataloader.dataset)
   for batch, (X, y) in enumerate(dataloader):
+    # shape is likely [64, 28, 28], needs reshaping to flatten 2D tensor to 1D for linear input
+    # X = X.reshape(batch_size, 28*28)
+    X = X.reshape(batch_size, 28*28).squeeze()
+
     # Compute prediction and loss
     logits = model(X)
+
     # pred = m(logits)
+    # print(pred)
 
     # https://discuss.pytorch.org/t/cross-entropy-loss-is-not-decreasing/43814
-    loss = loss_fn(logits ,y)
+    loss = loss_fn(logits, labels[y])
 
     # Backpropagation
     optimizer.zero_grad()
@@ -79,13 +96,18 @@ def test_loop(dataloader, model, loss_fn):
 
   with torch.no_grad():
     for X, y in dataloader:
+
+      X = X.reshape(batch_size, 28*28).squeeze()
       logits = model(X)
+
+      print(logits)
+
       pred = m(logits)
 
-      test_loss += loss_fn(pred, y).item()
+      test_loss += loss_fn(pred, labels[y]).item()
+      index_of_correct = torch.argmax(pred)
 
-      index_of_correct = torch.argmax(pred, dim=1)
-      correct += torch.sum(index_of_correct == torch.argmax(y, dim=1)).item()
+      correct += torch.sum(index_of_correct == torch.argmax(labels[y])).item()
 
   test_loss /= num_batches
   correct /= size
@@ -101,7 +123,7 @@ def run(save_model=False):
 
   if save_model:
     print("Saving Model")
-    torch.save(model, 'models/rgb_nn.pth')
+    torch.save(model, 'models/mnist_nn.pth')
     print('Saved!')
 
 run(save_model=False)
